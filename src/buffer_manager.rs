@@ -8,7 +8,7 @@ use crate::data_storage_manager::DSMgr;
 use crate::page::*;
 use crate::replacer::*;
 
-struct BMgr {
+pub struct BMgr {
     data_storage_manager: DSMgr,
     capacity: usize,
     free_list: Vec<usize>,

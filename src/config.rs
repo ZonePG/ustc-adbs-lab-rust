@@ -19,14 +19,14 @@ pub struct Config {
 impl Config {
     pub fn build(args: &[String]) -> Result<Config, &'static str> {
         if args.len() != 3 {
-            return Err("Usage: cargo run -- [lru|clock] [file_path]");
+            return Err("Usage: cargo run --release -- [lru|clock] [file_path]");
         }
 
         let policy = match args[1].as_str() {
             "lru" => ReplacePolicy::Lru,
             "clock" => ReplacePolicy::Clock,
             _ => {
-                return Err("Usage: cargo run -- [lru|clock] [file_path]");
+                return Err("Usage: cargo run --release -- [lru|clock] [file_path]");
             }
         };
         let file_path = args[2].clone();

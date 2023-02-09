@@ -1,57 +1,147 @@
-use std::time::Instant;
+use std::{collections::HashMap, ptr::NonNull};
 
-use crate::{replacer::replacer::Replacer, config::FrameId};
+use crate::{config::FrameId, replacer::replacer::Replacer};
 
-#[derive(Debug)]
-struct PageMetadata {
+struct Node {
     frame_id: FrameId,
-    last_accessed_at: Instant,
+    prev: Option<NonNull<Node>>,
+    next: Option<NonNull<Node>>,
 }
 
-impl PageMetadata {
-    pub fn new(frame_id: usize) -> Self {
+impl Node {
+    fn new(frame_id: FrameId) -> Self {
         Self {
             frame_id,
-            last_accessed_at: Instant::now(),
+            prev: None,
+            next: None,
         }
     }
 }
 
 pub struct LruReplacer {
-    page_table: Vec<PageMetadata>,
+    head: Option<NonNull<Node>>, // head -> LRU
+    tail: Option<NonNull<Node>>, // tail -> MRU
+    map: HashMap<FrameId, NonNull<Node>>,
+    capacity: usize,
+    marker: std::marker::PhantomData<Node>, // mark lifetime
+}
+
+impl LruReplacer {
+    fn detach(&mut self, mut node: NonNull<Node>) {
+        // delete specific node
+        unsafe {
+            match node.as_mut().prev {
+                Some(mut prev) => {
+                    prev.as_mut().next = node.as_ref().next;
+                }
+                None => {
+                    self.head = node.as_ref().next;
+                }
+            }
+            match node.as_mut().next {
+                Some(mut next) => {
+                    next.as_mut().prev = node.as_mut().prev;
+                }
+                None => {
+                    self.tail = node.as_ref().prev;
+                }
+            }
+
+            node.as_mut().prev = None;
+            node.as_mut().next = None;
+        }
+    }
+
+    fn attach(&mut self, mut node: NonNull<Node>) {
+        match self.tail {
+            Some(mut tail) => unsafe {
+                tail.as_mut().next = Some(node);
+                node.as_mut().prev = Some(tail);
+                node.as_mut().next = None;
+                self.tail = Some(node);
+            },
+            None => {
+                unsafe {
+                    node.as_mut().prev = None;
+                    node.as_mut().next = None;
+                }
+                self.head = Some(node);
+                self.tail = Some(node);
+            }
+        }
+    }
 }
 
 impl Replacer for LruReplacer {
     fn new(frame_num: FrameId) -> Self {
-        LruReplacer {
-            page_table: Vec::with_capacity(frame_num),
+        Self {
+            head: None,
+            tail: None,
+            map: HashMap::new(),
+            capacity: frame_num,
+            marker: std::marker::PhantomData,
         }
     }
 
     fn victim(&mut self) -> Option<FrameId> {
-        self.page_table.sort_by(|a, b| b.last_accessed_at.cmp(&a.last_accessed_at));
-        match self.page_table.pop() {
-            Some(page) => Some(page.frame_id),
-            None => None,
-        }
+        let head = self.head?;
+        let victim_frame_id = unsafe { head.as_ref().frame_id };
+        self.detach(head);
+        self.map.remove(&victim_frame_id);
+        drop(head.as_ptr());
+        Some(victim_frame_id)
     }
 
     fn insert(&mut self, frame_id: usize) {
-        self.page_table.push(PageMetadata::new(frame_id));
+        // remove old node if exists
+        if let Some(node) = self.map.get(&frame_id) {
+            let node = *node;
+            self.detach(node);
+            self.attach(node);
+        } else {
+            let node = Box::into_raw(Box::new(Node::new(frame_id)));
+            let node = unsafe { NonNull::new_unchecked(node) };
+            self.map.insert(frame_id, node);
+            self.attach(node);
+            if self.map.len() > self.capacity {
+                self.victim();
+            }
+        }
     }
 
     fn remove(&mut self, frame_id: usize) {
-        if let Some(index) = self.page_table.iter().position(|md| md.frame_id == frame_id) {
-            self.page_table.remove(index);
+        if let Some(node) = self.map.get(&frame_id) {
+            let node = *node;
+            self.detach(node);
+            self.map.remove(&frame_id);
+            drop(node.as_ptr());
         }
     }
 
     fn print(&self) {
-
+        let mut node = self.head;
+        while let Some(n) = node {
+            unsafe {
+                print!("{} ", n.as_ref().frame_id);
+                node = n.as_ref().next;
+            }
+        }
+        println!();
     }
 
     fn size(&self) -> usize {
-        self.page_table.len()
+        self.map.len()
+    }
+}
+
+impl Drop for LruReplacer {
+    fn drop(&mut self) {
+        while let Some(node) = self.head.take() {
+            unsafe {
+                self.head = node.as_ref().next;
+                drop(node.as_ptr());
+            }
+        }
     }
 }
 
@@ -61,41 +151,37 @@ mod test {
 
     #[test]
     fn lru_replacer_test() {
-        let mut replacer = LruReplacer::new(4);
-
-        // We have 3 candidates that can be choose to
-        // be evicted by our buffer pool.
-        replacer.insert(2);
-        sleep(5);
-        replacer.insert(0);
-        sleep(5);
+        let mut replacer = LruReplacer::new(5);
+        // 1 2 3 4 5
+        for i in 1..=5 {
+            replacer.insert(i);
+            assert_eq!(replacer.size(), i);
+        }
         replacer.insert(1);
-
-        let evicted_frame_id = replacer.victim().unwrap();
-        assert_eq!(evicted_frame_id, 2);
-    }
-
-    #[test]
-    fn lru_replacer_test2() {
-        let mut replacer = LruReplacer::new(4);
-
-        // We have 3 candidates that can be choose to
-        // be evicted by our buffer pool.
-        replacer.insert(2);
-        sleep(5);
-        replacer.insert(0);
-        sleep(5);
+        // 2 3 4 5 1
+        assert_eq!(replacer.size(), 5);
+        // 3 4 5 1
+        assert_eq!(replacer.victim().unwrap(), 2);
+        assert_eq!(replacer.size(), 4);
+        // 3 5 1
+        replacer.remove(4);
+        assert_eq!(replacer.size(), 3);
+        // 5 1 7 8 9
+        for i in 7..=9 {
+            replacer.insert(i);
+        }
+        // 7 8 9 5 1
+        replacer.insert(5);
         replacer.insert(1);
-        replacer.remove(2);
-
-        let evicted_page_id = replacer.victim().unwrap();
-        assert_eq!(evicted_page_id, 0);
+        assert_eq!(replacer.victim().unwrap(), 7);
+        assert_eq!(replacer.victim().unwrap(), 8);
+        assert_eq!(replacer.victim().unwrap(), 9);
+        assert_eq!(replacer.victim().unwrap(), 5);
+        assert_eq!(replacer.victim().unwrap(), 1);
+        assert_eq!(replacer.size(), 0);
+        for i in 10..15 {
+            replacer.insert(i);
+        }
+        assert_eq!(replacer.size(), 5);
     }
-
-    fn sleep(duration_in_ms: u64) {
-        let ten_millis = std::time::Duration::from_millis(duration_in_ms);
-        std::thread::sleep(ten_millis);
-    }
-
 }
-

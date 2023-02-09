@@ -27,6 +27,17 @@ pub struct LruReplacer {
 }
 
 impl LruReplacer {
+    pub fn new(frame_num: usize) -> Self {
+        Self {
+            head: None,
+            tail: None,
+            map: HashMap::new(),
+            capacity: frame_num,
+            marker: std::marker::PhantomData,
+        }
+    }
+
+
     fn detach(&mut self, mut node: NonNull<Node>) {
         // delete specific node
         unsafe {
@@ -73,16 +84,6 @@ impl LruReplacer {
 }
 
 impl Replacer for LruReplacer {
-    fn new(frame_num: FrameId) -> Self {
-        Self {
-            head: None,
-            tail: None,
-            map: HashMap::new(),
-            capacity: frame_num,
-            marker: std::marker::PhantomData,
-        }
-    }
-
     fn victim(&mut self) -> Option<FrameId> {
         let head = self.head?;
         let victim_frame_id = unsafe { head.as_ref().frame_id };
@@ -119,6 +120,7 @@ impl Replacer for LruReplacer {
     }
 
     fn print(&self) {
+        print!("Lru replacer: ");
         let mut node = self.head;
         while let Some(n) = node {
             unsafe {

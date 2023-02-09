@@ -46,10 +46,7 @@ impl DSMgr {
     }
 
     pub fn write_page(&mut self, page: &mut Page) -> Result<(), std::io::Error> {
-        let page_id = page.get_page_id();
-        if page_id >= self.num_pages {
-            self.num_pages = page_id + 1;
-        }
+        let page_id = page.get_page_id().unwrap();
         let offset = page_id * PAGE_SIZE;
         let data = page.get_data();
 
@@ -84,8 +81,15 @@ impl DSMgr {
         unimplemented!()
     }
 
-    pub fn new_page(&mut self) -> Page {
-        unimplemented!()
+    pub fn new_page(&mut self) -> PageId {
+        let buffer = [0; PAGE_SIZE];
+        let new_page_id = self.num_pages;
+        self.inc_num_pages();
+        let offset = new_page_id * PAGE_SIZE;
+        self.seek(offset);
+        self.curr_file.write_all(&buffer).unwrap();
+        self.curr_file.flush().unwrap();
+        new_page_id
     }
 }
 
@@ -95,21 +99,25 @@ mod test {
 
     #[test]
     fn test_data_storage_manager() {
-        let mut disk_manager = DSMgr::new(DB_TEST_FILE_NAME);
+        let file = format!("./target/test_file_{:?}.dbf", std::thread::current().id());
+        let mut disk_manager = DSMgr::new(&file);
 
         for i in 0..100 {
-            let mut page = Page::new(i);
+            let page_id = disk_manager.new_page();
+            assert_eq!(page_id, i);
+            let mut page = Page::new(Some(i));
             let test_data = format!("test data: {}", i);
             page.get_data()[..test_data.len()].copy_from_slice(test_data.as_bytes());
             disk_manager.write_page(&mut page).unwrap();
         }
+        assert_eq!(disk_manager.get_num_pages(), 100);
 
         for i in 0..100 {
             let test_data = disk_manager.read_page(i).unwrap();
             let test_target_data = format!("test data: {}", i);
             assert_eq!(&test_data[..test_target_data.len()], test_target_data.as_bytes());
         }
-
-        let _ = std::fs::remove_file(DB_TEST_FILE_NAME);
+        assert_eq!(disk_manager.get_num_pages(), 100);
+        let _ = std::fs::remove_file(file);
     }
 }

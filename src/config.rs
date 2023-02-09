@@ -1,7 +1,6 @@
 pub const FRAME_NUM: usize = 1024;
 pub const PAGE_SIZE: usize = 4096;
 pub const DB_FILE_NAME : &str = "./target/data.dbf";
-pub const DB_TEST_FILE_NAME : &str = "./target/test.dbf";
 
 pub type FrameId = usize;
 pub type PageId = usize;

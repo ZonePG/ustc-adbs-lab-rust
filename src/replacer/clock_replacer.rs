@@ -27,6 +27,15 @@ pub struct ClockReplacer {
 }
 
 impl ClockReplacer {
+    pub fn new(frame_num: usize) -> Self {
+        Self {
+            hand: None,
+            map: HashMap::new(),
+            capacity: frame_num,
+            marker: std::marker::PhantomData,
+        }
+    }
+
     fn detach(&mut self, mut node: NonNull<Node>) {
         if self.size() == 1 {
             unsafe {
@@ -62,15 +71,6 @@ impl ClockReplacer {
 }
 
 impl Replacer for ClockReplacer {
-    fn new(frame_num: FrameId) -> Self {
-        Self {
-            hand: None,
-            map: HashMap::new(),
-            capacity: frame_num,
-            marker: std::marker::PhantomData,
-        }
-    }
-
     fn victim(&mut self) -> Option<FrameId> {
         loop {
             let mut hand = self.hand?;

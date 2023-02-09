@@ -10,7 +10,7 @@ use crate::replacer::*;
 
 pub struct BMgr {
     data_storage_manager: DSMgr,
-    capacity: usize,
+    // capacity: usize,
     free_list: Vec<usize>,
     pages: Vec<Page>,
     replacer: Box<dyn Replacer>,
@@ -28,7 +28,7 @@ impl BMgr {
         for i in (0..frame_num).rev() {
             free_list.push(i);
         }
-        for i in 0..frame_num {
+        for _ in 0..frame_num {
             pages.push(Page::new(None));
         }
 
@@ -41,7 +41,7 @@ impl BMgr {
 
         BMgr {
             data_storage_manager,
-            capacity: frame_num,
+            // capacity: frame_num,
             free_list,
             pages,
             replacer,
@@ -71,7 +71,8 @@ impl BMgr {
             if let Some(frame_id) = self.select_victim() {
                 let page = &mut self.pages[frame_id];
                 // TODO optimize
-                page.get_data().copy_from_slice(&self.data_storage_manager.read_page(page_id).unwrap());
+                page.get_data()
+                    .copy_from_slice(&self.data_storage_manager.read_page(page_id).unwrap());
                 self.num_read_io += 1;
                 self.page_table.insert(page_id, frame_id);
                 page.increment_pin_count();
@@ -86,6 +87,7 @@ impl BMgr {
         }
     }
 
+    #[allow(dead_code)]
     pub fn fix_new_page(&mut self, page_id: &mut PageId) -> Option<FrameId> {
         if let Some(frame_id) = self.select_victim() {
             *page_id = self.data_storage_manager.new_page();
@@ -116,6 +118,7 @@ impl BMgr {
         }
     }
 
+    #[allow(dead_code)]
     pub fn num_free_frames(&self) -> usize {
         self.free_list.len()
     }
@@ -137,11 +140,13 @@ impl BMgr {
         Some(victim_frame_id)
     }
 
+    #[allow(dead_code)]
     fn set_dirty(&mut self, frame_id: FrameId) {
         let page = &mut self.pages[frame_id];
         page.set_dirty(true);
     }
 
+    #[allow(dead_code)]
     fn unset_dirty(&mut self, frame_id: FrameId) {
         let page = &mut self.pages[frame_id];
         page.set_dirty(false);
@@ -173,6 +178,7 @@ impl BMgr {
         self.num_hits
     }
 
+    #[allow(dead_code)]
     pub fn print_page_table(&self) {
         println!("Page Table:");
         for (page_id, frame_id) in &self.page_table {
@@ -181,6 +187,7 @@ impl BMgr {
         println!();
     }
 
+    #[allow(dead_code)]
     pub fn print_replacer(&self) {
         self.replacer.print();
     }
@@ -194,6 +201,7 @@ impl BMgr {
         println!();
     }
 
+    #[allow(dead_code)]
     pub fn print_all_frames(&self) {
         for i in 0..self.pages.len() {
             self.print_frame(i);
@@ -217,7 +225,7 @@ mod test {
         let mut buffer_manager = BMgr::new(&file, ReplacePolicy::Lru, 5);
         let mut page_id = 0;
         for i in 0..5 {
-            let frame_id = buffer_manager.fix_new_page(&mut page_id).unwrap();
+            let _ = buffer_manager.fix_new_page(&mut page_id).unwrap();
             buffer_manager.unfix_page(page_id);
             assert_eq!(page_id, i)
         }
@@ -247,7 +255,6 @@ mod test {
         let _ = std::fs::remove_file(file);
     }
 
-
     #[test]
     fn test_buffer_manager2() {
         let file = format!("./target/test_file_{:?}.dbf", std::thread::current().id());
@@ -256,7 +263,7 @@ mod test {
         // new 30 pages == 120k
         let mut page_id = 0;
         for i in 0..30 {
-            let frame_id = buffer_manager.fix_new_page(&mut page_id).unwrap();
+            let _ = buffer_manager.fix_new_page(&mut page_id).unwrap();
             buffer_manager.unfix_page(page_id);
             assert_eq!(page_id, i)
         }
@@ -266,7 +273,7 @@ mod test {
         println!("{}", buffer_manager.get_write_io_num());
         println!("{}", buffer_manager.get_hit_num());
         println!();
-        
+
         for i in 0..5 {
             assert_eq!(buffer_manager.fix_page(i, false).unwrap(), i);
             buffer_manager.unfix_page(i);

@@ -31,6 +31,7 @@ impl DSMgr {
         curr_file
     }
 
+    #[allow(dead_code)]
     fn close_file(&self) {
         // due to rust ownership mechanism, we don't need to implement close_file
         unimplemented!()
@@ -61,6 +62,7 @@ impl DSMgr {
             .expect("cannot seek");
     }
 
+    #[allow(dead_code)]
     pub fn get_file(&self) -> &File {
         &self.curr_file
     }
@@ -69,15 +71,20 @@ impl DSMgr {
         self.num_pages += 1;
     }
 
+    #[allow(dead_code)]
     pub fn get_num_pages(&self) -> usize {
         self.num_pages
     }
 
+    #[allow(unused_variables, dead_code)]
     pub fn set_use(page_id: PageId, use_bit: i32) {
+        // don't need
         unimplemented!()
     }
 
+    #[allow(unused_variables, dead_code)]
     pub fn get_use(page_id: PageId) -> i32 {
+        // don't need
         unimplemented!()
     }
 

@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 use std::ops::Not;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 use crate::config::*;
 use crate::data_storage_manager::DSMgr;
@@ -18,7 +16,6 @@ pub struct BMgr {
     num_write_io: usize,
     num_read_io: usize,
     num_hits: usize,
-    latch: Arc<Mutex<()>>,
 }
 
 impl BMgr {
@@ -49,13 +46,10 @@ impl BMgr {
             num_write_io: 0,
             num_read_io: 0,
             num_hits: 0,
-            latch: Arc::new(Mutex::new(())),
         }
     }
 
     pub fn fix_page(&mut self, page_id: PageId, is_dirty: bool) -> Option<FrameId> {
-        let _lock = self.latch.clone();
-        let _lock = _lock.lock().unwrap();
         if let Some(frame_id) = self.page_table.get(&page_id) {
             self.num_hits += 1;
             let page = &mut self.pages[*frame_id];
@@ -103,8 +97,6 @@ impl BMgr {
     }
 
     pub fn unfix_page(&mut self, page_id: PageId) -> Option<FrameId> {
-        let _lock = self.latch.clone();
-        let _lock = _lock.lock().unwrap();
         if let Some(frame_id) = self.page_table.get(&page_id) {
             let page = &mut self.pages[*frame_id];
             assert!(page.get_pin_count() > 0);
